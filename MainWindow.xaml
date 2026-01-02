@@ -1,0 +1,481 @@
+<Window x:Class="NetworkMonitorWPF.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+        xmlns:vm="clr-namespace:NetworkMonitorWPF.ViewModels"
+        mc:Ignorable="d"
+        Title="RDP &amp; Network Security Monitor" Height="900" Width="1600"
+        WindowStartupLocation="CenterScreen"
+        Background="{DynamicResource MaterialDesignPaper}"
+        TextElement.Foreground="{DynamicResource MaterialDesignBody}"
+        TextElement.FontWeight="Regular"
+        TextElement.FontSize="13"
+        TextOptions.TextFormattingMode="Ideal"
+        TextOptions.TextRenderingMode="Auto"
+        FontFamily="{DynamicResource MaterialDesignFont}"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        ResizeMode="CanResizeWithGrip">
+
+    <Window.DataContext>
+        <vm:MainViewModel/>
+    </Window.DataContext>
+
+    <Window.Resources>
+        <!-- Конвертер для цвета статуса -->
+        <SolidColorBrush x:Key="ActiveBrush" Color="#4CAF50"/>
+        <SolidColorBrush x:Key="InactiveBrush" Color="#F44336"/>
+
+        <!-- Стиль для статистических карточек -->
+        <Style x:Key="StatCard" TargetType="Border">
+            <Setter Property="Background" Value="{DynamicResource MaterialDesignCardBackground}"/>
+            <Setter Property="CornerRadius" Value="10"/>
+            <Setter Property="Padding" Value="20"/>
+            <Setter Property="Margin" Value="10"/>
+            <Setter Property="Effect">
+                <Setter.Value>
+                    <DropShadowEffect Color="#000" BlurRadius="15" ShadowDepth="3" Opacity="0.2"/>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Анимация для карточек -->
+        <Storyboard x:Key="CardHoverAnimation">
+            <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)"
+                           To="1.02" Duration="0:0:0.2"/>
+            <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)"
+                           To="1.02" Duration="0:0:0.2"/>
+        </Storyboard>
+    </Window.Resources>
+
+    <!-- Главный контейнер с градиентным фоном -->
+    <Border Background="{StaticResource DarkGradientBrush}" CornerRadius="15">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="60"/><!-- Заголовок -->
+                <RowDefinition Height="Auto"/><!-- Статистика -->
+                <RowDefinition Height="*"/><!-- Основной контент -->
+            </Grid.RowDefinitions>
+
+            <!-- ЗАГОЛОВОК С КНОПКАМИ УПРАВЛЕНИЯ ОКНОМ -->
+            <Border Grid.Row="0" Background="{DynamicResource PrimaryHueDarkBrush}"
+                    CornerRadius="15,15,0,0"
+                    MouseLeftButtonDown="Border_MouseLeftButtonDown">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+
+                    <!-- Иконка и название -->
+                    <StackPanel Grid.Column="0" Orientation="Horizontal" Margin="20,0">
+                        <materialDesign:PackIcon Kind="Security" Width="32" Height="32"
+                                                VerticalAlignment="Center"
+                                                Foreground="White"/>
+                        <TextBlock Text="RDP &amp; Network Security Monitor"
+                                  FontSize="20" FontWeight="Bold"
+                                  Foreground="White"
+                                  VerticalAlignment="Center"
+                                  Margin="15,0,0,0"/>
+                    </StackPanel>
+
+                    <!-- Статус -->
+                    <StackPanel Grid.Column="1" Orientation="Horizontal"
+                               HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <materialDesign:PackIcon Kind="Circle" Width="16" Height="16">
+                            <materialDesign:PackIcon.Style>
+                                <Style TargetType="materialDesign:PackIcon">
+                                    <Setter Property="Foreground" Value="#F44336"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsMonitoring}" Value="True">
+                                            <Setter Property="Foreground" Value="#4CAF50"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </materialDesign:PackIcon.Style>
+                        </materialDesign:PackIcon>
+                        <TextBlock Text="{Binding StatusMessage}"
+                                  FontSize="14" Foreground="White"
+                                  Margin="10,0,0,0"/>
+                    </StackPanel>
+
+                    <!-- Кнопки управления окном -->
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" Margin="0,0,10,0">
+                        <Button Style="{StaticResource MaterialDesignIconButton}"
+                               Click="MinimizeButton_Click"
+                               ToolTip="Свернуть">
+                            <materialDesign:PackIcon Kind="WindowMinimize" Foreground="White"/>
+                        </Button>
+                        <Button Style="{StaticResource MaterialDesignIconButton}"
+                               Click="MaximizeButton_Click"
+                               ToolTip="Развернуть">
+                            <materialDesign:PackIcon Kind="WindowMaximize" Foreground="White"/>
+                        </Button>
+                        <Button Style="{StaticResource MaterialDesignIconButton}"
+                               Click="CloseButton_Click"
+                               ToolTip="Закрыть">
+                            <materialDesign:PackIcon Kind="Close" Foreground="White"/>
+                        </Button>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <!-- ПАНЕЛЬ СТАТИСТИКИ -->
+            <Grid Grid.Row="1" Margin="10,10,10,10">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- Карточка: Всего попыток -->
+                <Border Grid.Column="0" Style="{StaticResource StatCard}"
+                        RenderTransformOrigin="0.5,0.5">
+                    <Border.RenderTransform>
+                        <ScaleTransform/>
+                    </Border.RenderTransform>
+                    <Border.Triggers>
+                        <EventTrigger RoutedEvent="MouseEnter">
+                            <BeginStoryboard Storyboard="{StaticResource CardHoverAnimation}"/>
+                        </EventTrigger>
+                    </Border.Triggers>
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+
+                        <StackPanel Grid.Row="0" Orientation="Horizontal">
+                            <materialDesign:PackIcon Kind="Login" Width="32" Height="32"
+                                                    Foreground="{DynamicResource PrimaryHueMidBrush}"/>
+                            <TextBlock Text="ВСЕГО ПОПЫТОК" FontSize="12"
+                                      Foreground="{DynamicResource MaterialDesignBodyLight}"
+                                      VerticalAlignment="Center" Margin="10,0"/>
+                        </StackPanel>
+
+                        <TextBlock Grid.Row="1" Text="{Binding TotalAttempts}"
+                                  FontSize="48" FontWeight="Bold"
+                                  Foreground="{DynamicResource PrimaryHueMidBrush}"
+                                  HorizontalAlignment="Center"/>
+                    </Grid>
+                </Border>
+
+                <!-- Карточка: Неудачные попытки -->
+                <Border Grid.Column="1" Style="{StaticResource StatCard}"
+                        RenderTransformOrigin="0.5,0.5">
+                    <Border.RenderTransform>
+                        <ScaleTransform/>
+                    </Border.RenderTransform>
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+
+                        <StackPanel Grid.Row="0" Orientation="Horizontal">
+                            <materialDesign:PackIcon Kind="AlertCircle" Width="32" Height="32"
+                                                    Foreground="#F44336"/>
+                            <TextBlock Text="НЕУДАЧНЫХ" FontSize="12"
+                                      Foreground="{DynamicResource MaterialDesignBodyLight}"
+                                      VerticalAlignment="Center" Margin="10,0"/>
+                        </StackPanel>
+
+                        <TextBlock Grid.Row="1" Text="{Binding FailedAttempts}"
+                                  FontSize="48" FontWeight="Bold"
+                                  Foreground="#F44336"
+                                  HorizontalAlignment="Center"/>
+                    </Grid>
+                </Border>
+
+                <!-- Карточка: Сетевые устройства -->
+                <Border Grid.Column="2" Style="{StaticResource StatCard}"
+                        RenderTransformOrigin="0.5,0.5">
+                    <Border.RenderTransform>
+                        <ScaleTransform/>
+                    </Border.RenderTransform>
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+
+                        <StackPanel Grid.Row="0" Orientation="Horizontal">
+                            <materialDesign:PackIcon Kind="Devices" Width="32" Height="32"
+                                                    Foreground="#2196F3"/>
+                            <TextBlock Text="УСТРОЙСТВ" FontSize="12"
+                                      Foreground="{DynamicResource MaterialDesignBodyLight}"
+                                      VerticalAlignment="Center" Margin="10,0"/>
+                        </StackPanel>
+
+                        <TextBlock Grid.Row="1" Text="{Binding NetworkDevicesCount}"
+                                  FontSize="48" FontWeight="Bold"
+                                  Foreground="#2196F3"
+                                  HorizontalAlignment="Center"/>
+                    </Grid>
+                </Border>
+
+                <!-- Карточка: Активные угрозы -->
+                <Border Grid.Column="3" Style="{StaticResource StatCard}"
+                        RenderTransformOrigin="0.5,0.5">
+                    <Border.RenderTransform>
+                        <ScaleTransform/>
+                    </Border.RenderTransform>
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+
+                        <StackPanel Grid.Row="0" Orientation="Horizontal">
+                            <materialDesign:PackIcon Kind="ShieldAlert" Width="32" Height="32"
+                                                    Foreground="#FF9800"/>
+                            <TextBlock Text="УГРОЗ" FontSize="12"
+                                      Foreground="{DynamicResource MaterialDesignBodyLight}"
+                                      VerticalAlignment="Center" Margin="10,0"/>
+                        </StackPanel>
+
+                        <TextBlock Grid.Row="1" Text="{Binding ActiveThreats}"
+                                  FontSize="48" FontWeight="Bold"
+                                  Foreground="#FF9800"
+                                  HorizontalAlignment="Center"/>
+                    </Grid>
+                </Border>
+            </Grid>
+
+            <!-- ОСНОВНОЙ КОНТЕНТ -->
+            <Grid Grid.Row="2" Margin="10">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="250"/><!-- Панель управления -->
+                    <ColumnDefinition Width="*"/><!-- Данные -->
+                </Grid.ColumnDefinitions>
+
+                <!-- ПАНЕЛЬ УПРАВЛЕНИЯ -->
+                <materialDesign:Card Grid.Column="0" Margin="0,0,10,0" UniformCornerRadius="10"
+                                    materialDesign:ElevationAssist.Elevation="Dp4">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel Margin="15">
+                            <TextBlock Text="УПРАВЛЕНИЕ" FontSize="16" FontWeight="Bold"
+                                      Foreground="White"
+                                      Margin="0,0,0,15"/>
+
+                            <!-- Кнопка Старт -->
+                            <Button Command="{Binding StartMonitoringCommand}"
+                                   Style="{StaticResource MaterialDesignRaisedButton}"
+                                   Height="50" Margin="0,5"
+                                   Background="#4CAF50">
+                                <StackPanel Orientation="Horizontal">
+                                    <materialDesign:PackIcon Kind="Play" Width="24" Height="24"/>
+                                    <TextBlock Text="ЗАПУСТИТЬ" Margin="10,0" FontWeight="Bold"/>
+                                </StackPanel>
+                            </Button>
+
+                            <!-- Кнопка Стоп -->
+                            <Button Command="{Binding StopMonitoringCommand}"
+                                   Style="{StaticResource MaterialDesignRaisedButton}"
+                                   Height="50" Margin="0,5"
+                                   Background="#F44336">
+                                <StackPanel Orientation="Horizontal">
+                                    <materialDesign:PackIcon Kind="Stop" Width="24" Height="24"/>
+                                    <TextBlock Text="ОСТАНОВИТЬ" Margin="10,0" FontWeight="Bold"/>
+                                </StackPanel>
+                            </Button>
+
+                            <Separator Margin="0,15"/>
+
+                            <!-- Кнопка Сканирование сети -->
+                            <Button Command="{Binding ScanNetworkCommand}"
+                                   Style="{StaticResource MaterialDesignRaisedButton}"
+                                   Height="45" Margin="0,5"
+                                   Background="#2196F3">
+                                <StackPanel Orientation="Horizontal">
+                                    <materialDesign:PackIcon Kind="Radar" Width="20" Height="20"/>
+                                    <TextBlock Text="СКАНИРОВАТЬ" Margin="10,0"/>
+                                </StackPanel>
+                            </Button>
+
+                            <!-- Кнопка Диагностика -->
+                            <Button Command="{Binding DiagnosticCommand}"
+                                   Style="{StaticResource MaterialDesignFlatButton}"
+                                   Height="40" Margin="0,5"
+                                   Background="#33FFFFFF"
+                                   Foreground="White">
+                                <StackPanel Orientation="Horizontal">
+                                    <materialDesign:PackIcon Kind="Stethoscope" Width="20" Height="20"/>
+                                    <TextBlock Text="Диагностика" Margin="10,0"/>
+                                </StackPanel>
+                            </Button>
+
+                            <!-- Кнопка RDP Тест -->
+                            <Button Command="{Binding TestRDPCommand}"
+                                   Style="{StaticResource MaterialDesignFlatButton}"
+                                   Height="40" Margin="0,5"
+                                   Background="#33FFFFFF"
+                                   Foreground="White">
+                                <StackPanel Orientation="Horizontal">
+                                    <materialDesign:PackIcon Kind="TestTube" Width="20" Height="20"/>
+                                    <TextBlock Text="RDP Тест" Margin="10,0"/>
+                                </StackPanel>
+                            </Button>
+
+                            <!-- Кнопка Очистить -->
+                            <Button Command="{Binding ClearDataCommand}"
+                                   Style="{StaticResource MaterialDesignFlatButton}"
+                                   Height="40" Margin="0,5"
+                                   Background="#33FFFFFF"
+                                   Foreground="White">
+                                <StackPanel Orientation="Horizontal">
+                                    <materialDesign:PackIcon Kind="DeleteSweep" Width="20" Height="20"/>
+                                    <TextBlock Text="Очистить" Margin="10,0"/>
+                                </StackPanel>
+                            </Button>
+
+                            <Separator Margin="0,15"/>
+
+                            <!-- НАСТРОЙКИ -->
+                            <TextBlock Text="НАСТРОЙКИ" FontSize="14" FontWeight="Bold"
+                                      Foreground="White"
+                                      Margin="0,10,0,10"/>
+
+                            <!-- Макс. попыток -->
+                            <TextBlock Text="Макс. попыток:" Margin="0,5" Foreground="LightGray"/>
+                            <Slider Minimum="3" Maximum="20" Value="{Binding MaxFailedAttempts}"
+                                   TickFrequency="1" IsSnapToTickEnabled="True"
+                                   Margin="0,5"/>
+                            <TextBlock Text="{Binding MaxFailedAttempts}"
+                                      HorizontalAlignment="Center"
+                                      FontWeight="Bold"
+                                      Foreground="White"/>
+
+                            <!-- Временное окно -->
+                            <TextBlock Text="Окно (мин):" Margin="0,15,0,5" Foreground="LightGray"/>
+                            <Slider Minimum="5" Maximum="60" Value="{Binding TimeWindowMinutes}"
+                                   TickFrequency="5" IsSnapToTickEnabled="True"
+                                   Margin="0,5"/>
+                            <TextBlock Text="{Binding TimeWindowMinutes}"
+                                      HorizontalAlignment="Center"
+                                      FontWeight="Bold"
+                                      Foreground="White"/>
+
+                            <Separator Margin="0,15"/>
+
+                            <!-- Чекбоксы -->
+                            <CheckBox Content="Сетевой мониторинг"
+                                     IsChecked="{Binding EnableNetworkMonitoring}"
+                                     Margin="0,5"/>
+                            <CheckBox Content="Звуковые уведомления"
+                                     IsChecked="{Binding EnableSoundNotifications}"
+                                     Margin="0,5"/>
+                            <CheckBox Content="Автосканирование"
+                                     IsChecked="{Binding EnableAutoScan}"
+                                     Margin="0,5"/>
+
+                            <!-- Интервал автосканирования -->
+                            <TextBlock Text="Интервал (мин):" Margin="0,15,0,5" Foreground="LightGray"/>
+                            <Slider Minimum="1" Maximum="60" Value="{Binding AutoScanIntervalMinutes}"
+                                   TickFrequency="1" IsSnapToTickEnabled="True"
+                                   Margin="0,5"/>
+                            <TextBlock Text="{Binding AutoScanIntervalMinutes}"
+                                      HorizontalAlignment="Center"
+                                      FontWeight="Bold"
+                                      Foreground="White"/>
+                        </StackPanel>
+                    </ScrollViewer>
+                </materialDesign:Card>
+
+                <!-- ПАНЕЛЬ ДАННЫХ С ВКЛАДКАМИ -->
+                <materialDesign:Card Grid.Column="1" UniformCornerRadius="10"
+                                    materialDesign:ElevationAssist.Elevation="Dp4">
+                    <TabControl Style="{StaticResource MaterialDesignFilledTabControl}"
+                               materialDesign:ColorZoneAssist.Mode="PrimaryMid">
+
+                        <!-- Вкладка: RDP События -->
+                        <TabItem>
+                            <TabItem.Header>
+                                <StackPanel Orientation="Horizontal">
+                                    <materialDesign:PackIcon Kind="Login" VerticalAlignment="Center"/>
+                                    <TextBlock Text="RDP СОБЫТИЯ" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </TabItem.Header>
+
+                            <DataGrid ItemsSource="{Binding LoginAttempts}"
+                                     AutoGenerateColumns="False"
+                                     CanUserAddRows="False"
+                                     IsReadOnly="True"
+                                     SelectionMode="Single"
+                                     materialDesign:DataGridAssist.CellPadding="10"
+                                     materialDesign:DataGridAssist.ColumnHeaderPadding="10">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="Время" Binding="{Binding TimeStamp, StringFormat=HH:mm:ss}" Width="Auto"/>
+                                    <DataGridTextColumn Header="Пользователь" Binding="{Binding Username}" Width="*"/>
+                                    <DataGridTextColumn Header="IP адрес" Binding="{Binding SourceIP}" Width="Auto"/>
+                                    <DataGridTextColumn Header="Компьютер" Binding="{Binding Computer}" Width="Auto"/>
+                                    <DataGridTextColumn Header="Тип входа" Binding="{Binding LogonType}" Width="Auto"/>
+                                    <DataGridTextColumn Header="Событие" Binding="{Binding EventType}" Width="*"/>
+                                    <DataGridTextColumn Header="Статус" Binding="{Binding Status}" Width="Auto"/>
+                                </DataGrid.Columns>
+                            </DataGrid>
+                        </TabItem>
+
+                        <!-- Вкладка: Сетевые Устройства -->
+                        <TabItem>
+                            <TabItem.Header>
+                                <StackPanel Orientation="Horizontal">
+                                    <materialDesign:PackIcon Kind="Devices" VerticalAlignment="Center"/>
+                                    <TextBlock Text="УСТРОЙСТВА" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </TabItem.Header>
+
+                            <DataGrid ItemsSource="{Binding NetworkDevices}"
+                                     AutoGenerateColumns="False"
+                                     CanUserAddRows="False"
+                                     IsReadOnly="True"
+                                     materialDesign:DataGridAssist.CellPadding="10"
+                                     materialDesign:DataGridAssist.ColumnHeaderPadding="10">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="IP адрес" Binding="{Binding IPAddress}" Width="Auto"/>
+                                    <DataGridTextColumn Header="MAC адрес" Binding="{Binding MACAddress}" Width="Auto"/>
+                                    <DataGridTextColumn Header="Хост" Binding="{Binding Hostname}" Width="*"/>
+                                    <DataGridTextColumn Header="Производитель" Binding="{Binding Vendor}" Width="*"/>
+                                    <DataGridTextColumn Header="Тип" Binding="{Binding DeviceType}" Width="Auto"/>
+                                    <DataGridTextColumn Header="ОС" Binding="{Binding OperatingSystem}" Width="Auto"/>
+                                    <DataGridTextColumn Header="Статус" Binding="{Binding Status}" Width="Auto"/>
+                                    <DataGridTextColumn Header="Последнее" Binding="{Binding LastSeen, StringFormat=HH:mm:ss}" Width="Auto"/>
+                                </DataGrid.Columns>
+                            </DataGrid>
+                        </TabItem>
+
+                        <!-- Вкладка: Логи -->
+                        <TabItem>
+                            <TabItem.Header>
+                                <StackPanel Orientation="Horizontal">
+                                    <materialDesign:PackIcon Kind="TextBox" VerticalAlignment="Center"/>
+                                    <TextBlock Text="ЛОГИ" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </TabItem.Header>
+
+                            <ListBox ItemsSource="{Binding LogMessages}"
+                                    ScrollViewer.VerticalScrollBarVisibility="Auto">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Orientation="Horizontal" Margin="5">
+                                            <TextBlock Text="{Binding Timestamp, StringFormat=HH:mm:ss}"
+                                                      FontFamily="Consolas"
+                                                      Foreground="Gray" Width="70"/>
+                                            <TextBlock Text="{Binding Message}"
+                                                      Foreground="{Binding Color}"
+                                                      TextWrapping="Wrap" Margin="10,0"/>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                        </TabItem>
+                    </TabControl>
+                </materialDesign:Card>
+            </Grid>
+        </Grid>
+    </Border>
+</Window>
